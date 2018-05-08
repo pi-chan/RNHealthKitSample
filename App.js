@@ -4,55 +4,139 @@
  * @flow
  */
 
-import React, { Component } from 'react';
-import {
-  Platform,
-  StyleSheet,
-  Text,
-  View
-} from 'react-native';
+import React, { Component } from "react";
+import { SectionList, StatusBar, Text, View, SafeAreaView } from "react-native";
 
-const instructions = Platform.select({
-  ios: 'Press Cmd+R to reload,\n' +
-    'Cmd+D or shake for dev menu',
-  android: 'Double tap R on your keyboard to reload,\n' +
-    'Shake or press menu button for dev menu',
+import AppleHealthKit from "rn-apple-healthkit";
+const PERMS = AppleHealthKit.Constants.Permissions;
+const UNITS = AppleHealthKit.Constants.Units;
+
+const options = {
+  permissions: {
+    read: [PERMS.Weight, PERMS.SleepAnalysis]
+  }
+};
+
+AppleHealthKit.initHealthKit(options, (err, results) => {
+  if (err) {
+    console.log("error initializing Healthkit: ", err);
+  } else {
+    console.log(results);
+  }
 });
+
+const SleepItem = ({ startDate, endDate, value }) => {
+  return (
+    <View
+      style={{
+        padding: 5,
+        borderTopWidth: 1,
+        borderTopColor: "#EAEAEA"
+      }}
+    >
+      <Text>{`${startDate.substr(0, 10)}: ${startDate.substr(11, 5)}〜${endDate.substr(11, 5)}`}</Text>
+      <Text>{value}</Text>
+    </View>
+  );
+};
+
+const WeightItem = ({ startDate, endDate, value }) => {
+  const kg = Math.round(value) / 1000.0;
+  return (
+    <View
+      style={{
+        padding: 5,
+        borderTopWidth: 1,
+        borderTopColor: "#EAEAEA"
+      }}
+    >
+      <Text>{startDate.substr(0, 10)}</Text>
+      <Text>{`${kg} kg`}</Text>
+    </View>
+  );
+};
 
 type Props = {};
 export default class App extends Component<Props> {
-  render() {
+  constructor() {
+    super();
+    this.state = {
+      sleepSamples: [],
+      weightSamples: []
+    };
+  }
+
+  componentDidMount() {
+    const optionWeight = {
+      unit: UNITS.gram,
+      startDate: new Date(2018, 4, 1).toISOString()
+    };
+    AppleHealthKit.getWeightSamples(optionWeight, (err, results) => {
+      if (err) {
+        console.log(err);
+      } else {
+        this.setState({ weightSamples: results });
+      }
+    });
+
+    const optionSleep = {
+      startDate: new Date(2018, 4, 1).toISOString()
+    };
+    AppleHealthKit.getSleepSamples(optionSleep, (err, results) => {
+      if (err) {
+        console.log(err);
+      } else {
+        this.setState({ sleepSamples: results });
+      }
+    });
+  }
+
+  renderWeight({ item }) {
+    return WeightItem(item);
+  }
+
+  renderSleep({ item }) {
+    return SleepItem(item);
+  }
+
+  renderSectionHeader({ section }) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.welcome}>
-          Welcome to React Native!
-        </Text>
-        <Text style={styles.instructions}>
-          To get started, edit App.js
-        </Text>
-        <Text style={styles.instructions}>
-          {instructions}
+      <View
+        style={{
+          height: 28,
+          padding: 4,
+          backgroundColor: "#F0F0F0",
+          justifyContent: "center"
+        }}
+      >
+        <Text style={{ fontWeight: "bold", fontSize: 16 }}>
+          {section.title}
         </Text>
       </View>
     );
   }
-}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5FCFF',
-  },
-  welcome: {
-    fontSize: 20,
-    textAlign: 'center',
-    margin: 10,
-  },
-  instructions: {
-    textAlign: 'center',
-    color: '#333333',
-    marginBottom: 5,
-  },
-});
+  render() {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: "white" }}>
+        <SectionList
+          style={{ flex: 1 }}
+          keyExtractor={item => item.startDate + item.value.toString()}
+          renderSectionHeader={this.renderSectionHeader.bind(this)}
+          sections={[
+            {
+              title: "体重",
+              data: this.state.weightSamples,
+              renderItem: this.renderWeight.bind(this)
+            },
+            {
+              title: "睡眠",
+              data: this.state.sleepSamples,
+              renderItem: this.renderSleep.bind(this)
+            }
+          ]}
+        />
+      </SafeAreaView>
+    );
+  }
+}
